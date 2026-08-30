@@ -1,34 +1,37 @@
 @echo off
-REM Mixing Station Copilot launcher (Windows)
-REM Requires Node.js 20+ from https://nodejs.org
 setlocal
 cd /d "%~dp0"
+echo Mixing Station Copilot
+echo.
 
-node -v >nul 2>&1
+where node >nul 2>&1
 if errorlevel 1 (
-  echo Need Node.js 20+. Install from https://nodejs.org
+  echo Node.js not found. Install Node 20 or newer from https://nodejs.org
+  echo Then run start.bat again.
   pause
   exit /b 1
 )
 
-for /f "tokens=1 delims=." %%v in ('node -v') do set NODE_MAJOR=%%v
-set NODE_MAJOR=%NODE_MAJOR:~1%
-if %NODE_MAJOR% LSS 20 (
-  echo Need Node.js 20+ (found %NODE_MAJOR%). Install from https://nodejs.org
-  pause
-  exit /b 1
-)
+for /f "delims=" %%v in ('node -v') do set NODE_VER=%%v
+echo Found Node %NODE_VER%
 
 if not exist node_modules (
-  echo Installing dependencies...
+  echo Installing dependencies, please wait...
   call npm install --no-audit --no-fund
   if errorlevel 1 (
-    echo npm install failed
+    echo.
+    echo npm install failed. Check your internet connection.
     pause
     exit /b 1
   )
 )
 
+echo.
+echo Starting Copilot... browser will open at http://localhost:8085
+echo Keep this window open while using Copilot. Press Ctrl+C to stop.
+echo.
 start "" http://localhost:8085
 node server/index.js
+echo.
+echo Copilot stopped.
 pause
