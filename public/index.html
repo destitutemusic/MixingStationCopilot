@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Mixing Station Copilot</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2230;
+    --border: #2a3342;
+    --text: #dbe4f0;
+    --muted: #8b98ab;
+    --accent: #4f8cff;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --err: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+  #statusDot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted);
+    flex: 0 0 auto;
+  }
+  #statusDot.ready { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  #statusDot.err { background: var(--err); }
+  #statusDot.pending { background: var(--warn); }
+  main { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+
+  /* ---- setup view ---- */
+  #setupView { max-width: 560px; margin: 0 auto; padding: 24px 16px; width: 100%; }
+  #setupView h2 { font-size: 18px; margin-bottom: 4px; }
+  #setupView .sub { color: var(--muted); margin-bottom: 20px; font-size: 13px; }
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .steps li {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px;
+  }
+  .steps li .ico { width: 20px; text-align: center; flex: 0 0 auto; }
+  .steps li .lbl { flex: 1 1 auto; }
+  .steps li .det { color: var(--muted); font-size: 12px; text-align: right; }
+  .ok .ico { color: var(--ok); }
+  .bad .ico { color: var(--err); }
+  .pend .ico { color: var(--warn); }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h3 { font-size: 14px; margin-bottom: 8px; }
+  .card p, .card li { font-size: 13px; color: var(--muted); }
+  .card ul { padding-left: 18px; }
+  .card code {
+    background: var(--panel-2); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--text);
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text);
+    border-radius: 6px; padding: 8px 14px; font-size: 14px; cursor: pointer;
+    margin-top: 10px;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  #downloadCard { display: none; }
+  #downloadCard.visible { display: block; }
+  .progressWrap { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin: 10px 0 4px; }
+  #progressBar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  #progressText { font-size: 12px; color: var(--muted); }
+  #msCard { display: none; }
+  #msCard.visible { display: block; }
+  #llamaCard { display: none; }
+  #llamaCard.visible { display: block; }
+
+  /* ---- chat view ---- */
+  #chatView { flex: 1 1 auto; display: none; flex-direction: column; min-height: 0; }
+  #chatView.visible { display: flex; }
+  #messages { flex: 1 1 auto; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+  .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); }
+  .msg.tool { align-self: center; background: var(--panel-2); border: 1px dashed var(--border); color: var(--muted); font-size: 12px; max-width: 90%; }
+  .msg.error { align-self: flex-start; background: #2d1517; border: 1px solid var(--err); color: var(--err); }
+  .typing {
+    align-self: flex-start; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 14px; font-size: 14px; color: var(--muted);
+  }
+  .typing::after { content: "…"; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #inputRow { flex: 0 0 auto; display: flex; gap: 8px; padding: 12px 16px; background: var(--panel); border-top: 1px solid var(--border); }
+  #inputRow input {
+    flex: 1 1 auto; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 15px; outline: none;
+  }
+  #inputRow input:focus { border-color: var(--accent); }
+  #sendBtn { appearance: none; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; padding: 0 18px; font-size: 15px; cursor: pointer; }
+  #sendBtn:disabled { opacity: 0.5; cursor: default; }
+
+  @media (max-width: 480px) {
+    .msg { max-width: 90%; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <span id="statusDot"></span>
+    <h1>Mixing Station Copilot</h1>
+  </header>
+  <main>
+    <section id="setupView">
+      <h2>Setup</h2>
+      <p class="sub">Checking everything the copilot needs to control your mixer.</p>
+      <ul class="steps" id="steps"></ul>
+      <div class="card" id="downloadCard">
+        <h3>Download the AI model</h3>
+        <p>The local voice model (<code>functionary-small-v2.5.Q4_0.gguf</code>, ~4.4&nbsp;GB) is not present yet. It will be downloaded from Hugging Face, then the model server starts automatically.</p>
+        <button class="btn primary" id="downloadBtn">Download model</button>
+        <div class="progressWrap"><div id="progressBar"></div></div>
+        <div id="progressText"></div>
+      </div>
+      <div class="card" id="msCard">
+        <h3>Mixing Station is not reachable</h3>
+        <ul>
+          <li>Open <b>Mixing Station Desktop</b> and connect it to your X AIR mixer.</li>
+          <li>Menu <b>&#9881; gear icon</b> &rarr; enable <b>HTTP REST</b> API on port <code>8080</code>.</li>
+        </ul>
+        <button class="btn" id="retryBtn">Retry connection</button>
+      </div>
+      <div class="card" id="llamaCard">
+        <h3>Starting the model server</h3>
+        <p>llama-server is loading the model. First load can take a minute on CPU. This page refreshes automatically.</p>
+      </div>
+    </section>
+    <section id="chatView">
+      <div id="messages"></div>
+      <div id="inputRow">
+        <input id="chatInput" type="text" placeholder="Try &quot;mute channel 3&quot; or &quot;set channel 1 fader to -10&quot;" autocomplete="off" />
+        <button id="sendBtn">Send</button>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

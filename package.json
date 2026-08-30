@@ -1,0 +1,19 @@
+{
+  "name": "mixing-station-copilot",
+  "version": "0.1.0",
+  "description": "Natural-language mixer copilot: chat UI + local Functionary LLM + Mixing Station via MsMcp",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "build": "node --check server/index.js && node --check server/llama.js && node --check server/agent.js && node --check server/setup.js && node --check public/app.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "ws": "^8.21.3",
+    "zod": "^4.4.3"
+  }
+}
