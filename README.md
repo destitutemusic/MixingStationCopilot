@@ -20,11 +20,8 @@ Mixing Station connection.
 
 ## Platform notes
 
-- **Linux/macOS**: bundled `bin/linux-x64/llama-server` is used.
-- **Windows**: download the llama.cpp Windows release from
-  https://github.com/ggml-org/llama.cpp/releases (b10700 or newer,
-  `llama-b*-bin-win-cpu-x64.zip`). Extract `llama-server.exe` and all `.dll`
-  files into `bin/win-x64/`.
+- **Windows/Linux**: the matching `llama-server` binary is bundled under
+  `bin/win-x64/` or `bin/linux-x64/` and is used automatically.
 
 ## Troubleshooting
 
