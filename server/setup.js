@@ -13,12 +13,20 @@ export const MODEL_CATALOG = [
 		ramNote: '8 GB+ RAM recommended',
 	},
 	{
+		id: 'hermes-3-llama3.2-3b',
+		label: 'Hermes 3 Llama 3.2 3B (best tool calling)',
+		filename: 'Hermes-3-Llama-3.2-3B.Q4_K_M.gguf',
+		url: 'https://huggingface.co/NousResearch/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B.Q4_K_M.gguf',
+		sizeBytes: 2_019_373_888,
+		ramNote: '4 GB+ RAM, purpose-trained for function calling',
+	},
+	{
 		id: 'qwen2.5-1.5b',
-		label: 'Qwen2.5 1.5B (light)',
+		label: 'Qwen2.5 1.5B (smallest)',
 		filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
 		url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
 		sizeBytes: 1_100_000_000,
-		ramNote: '4 GB+ RAM, older PCs',
+		ramNote: '4 GB+ RAM, tool calling unreliable',
 	},
 ];
 

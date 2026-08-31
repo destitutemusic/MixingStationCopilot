@@ -18,8 +18,9 @@ the Mixing Station connection.
 
 | Model | Download | RAM needed | Best for |
 |---|---|---|---|
-| **Functionary Small 2.5** (recommended) | ~4.4 GB | 8 GB+ | Best tool-calling accuracy; needs a reasonably modern PC |
-| **Qwen2.5 1.5B** (light) | ~1.0 GB | 4 GB+ | Older/weaker PCs; slower to understand complex requests |
+| **Functionary Small 2.5** | ~4.4 GB | 8 GB+ | Best tool-calling accuracy; needs a modern PC |
+| **Hermes 3 Llama 3.2 3B** (recommended) | ~2.0 GB | 4 GB+ | Purpose-built tool calling at low RAM; best balance |
+| **Qwen2.5 1.5B** (smallest) | ~1.0 GB | 4 GB+ | Lightest option; tool calling unreliable |
 
 The setup screen shows a model picker before downloading. If the download
 fails or the chat feels unresponsive on your machine, delete the file in
