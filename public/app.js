@@ -63,10 +63,43 @@
 		return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 	}
 
+	async function renderModelChoices() {
+		const res = await fetch('/api/setup/models');
+		const models = await res.json();
+		const wrap = document.getElementById('modelChoices');
+		wrap.innerHTML = '';
+		let selected = null;
+		models.forEach((m, i) => {
+			const label = document.createElement('label');
+			label.className = 'modelChoice';
+			const sizeGb = (m.sizeBytes / 1e9).toFixed(1);
+			label.innerHTML = `<input type="radio" name="modelChoice" value="${m.id}" ${i === 0 ? 'checked' : ''}>` +
+				`<span><span class="mLabel">${m.label}</span>` +
+				`<span class="mMeta">~${sizeGb} GB download \u00b7 ${m.ramNote}${m.present ? ' \u00b7 already downloaded' : ''}</span></span>`;
+			wrap.appendChild(label);
+		});
+		wrap.querySelectorAll('input[name=modelChoice]').forEach((input) => {
+			input.addEventListener('change', () => {
+				selected = input.value;
+				const btn = document.getElementById('downloadBtn');
+				btn.disabled = false;
+				btn.textContent = models.find((m) => m.id === selected).present ? 'Use this model' : 'Download model';
+			});
+		});
+		// default-select first
+		selected = models[0].id;
+		const btn = document.getElementById('downloadBtn');
+		btn.disabled = false;
+		btn.textContent = models[0].present ? 'Use this model' : 'Download model';
+		window.__selectedModel = () => selected;
+	}
+
 	function renderSetup(status) {
 		renderSteps(status);
 		const needs = status.needs;
+		const cardWasHidden = !$('downloadCard').classList.contains('visible');
 		$('downloadCard').classList.toggle('visible', needs === 'model');
+		if (needs === 'model' && cardWasHidden) renderModelChoices();
 		$('msCard').classList.toggle('visible', needs === 'ms');
 		$('llamaCard').classList.toggle('visible', needs === 'llama-start');
 		if (status.ready) {
@@ -174,7 +207,8 @@
 	$('downloadBtn').addEventListener('click', async () => {
 		$('downloadBtn').disabled = true;
 		$('progressText').textContent = 'Starting download\u2026';
-		await fetch('/api/setup/download', { method: 'POST' });
+		const modelId = window.__selectedModel ? window.__selectedModel() : undefined;
+		await fetch('/api/setup/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId }) });
 		pollDownload();
 	});
 

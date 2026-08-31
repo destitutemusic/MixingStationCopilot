@@ -10,7 +10,7 @@ import { MsMcpGateway } from '../vendor/msmcp/msmcp-gateway.js';
 
 import { startLlama, stopLlama, checkLlamaBinary } from './llama.js';
 import { createAgent } from './agent.js';
-import { defaultModelPath, DEFAULT_MODEL_URL, downloadModel, runSetupChecks } from './setup.js';
+import { defaultModelPath, DEFAULT_MODEL_URL, downloadModel, runSetupChecks, MODEL_CATALOG, modelById, modelAvailability } from './setup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -199,6 +199,11 @@ async function main() {
 			return;
 		}
 
+		if (req.method === 'GET' && pathname === '/api/setup/models') {
+			sendJson(res, 200, modelAvailability());
+			return;
+		}
+
 		if (req.method === 'GET' && pathname === '/api/setup/download') {
 			sendJson(res, 200, state.download ?? { state: 'idle', percent: 0 });
 			return;
@@ -209,10 +214,20 @@ async function main() {
 				sendJson(res, 200, { started: false, message: 'download already in progress' });
 				return;
 			}
+			let body = '';
+			req.on('data', (c) => (body += c));
+			req.on('end', () => {
+			let modelId = null;
+			try { modelId = JSON.parse(body || '{}').modelId ?? null; } catch { modelId = null; }
+			const entry = modelId ? modelById(modelId) : null;
+			const dlUrl = entry ? entry.url : config.modelUrl;
+			const dlDest = entry ? path.join(ROOT_DIR, 'models', entry.filename) : config.modelPath;
+			config.modelUrl = dlUrl;
+			config.modelPath = dlDest;
 			state.download = { state: 'downloading', received: 0, total: 0, percent: 0, error: null };
 			downloadModel({
-				url: config.modelUrl,
-				dest: config.modelPath,
+				url: dlUrl,
+				dest: dlDest,
 				onProgress: (p) => {
 					state.download = { ...state.download, ...p };
 					broadcast({ type: 'download', ...state.download });
@@ -229,7 +244,8 @@ async function main() {
 					broadcast({ type: 'download', ...state.download });
 					console.error(`[setup] download failed: ${error.message}`);
 				});
-			sendJson(res, 200, { started: true });
+				sendJson(res, 200, { started: true });
+			});
 			return;
 		}
 

@@ -3,12 +3,49 @@ import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { resolveLlamaBinary, ROOT_DIR } from './llama.js';
 
-export const DEFAULT_MODEL_FILENAME = 'functionary-small-v2.5.Q4_0.gguf';
-export const DEFAULT_MODEL_URL =
-	'https://huggingface.co/meetkai/functionary-small-v2.5-GGUF/resolve/main/functionary-small-v2.5.Q4_0.gguf';
+export const MODEL_CATALOG = [
+	{
+		id: 'functionary-small-v2.5',
+		label: 'Functionary Small 2.5 (recommended)',
+		filename: 'functionary-small-v2.5.Q4_0.gguf',
+		url: 'https://huggingface.co/meetkai/functionary-small-v2.5-GGUF/resolve/main/functionary-small-v2.5.Q4_0.gguf',
+		sizeBytes: 4_661_212_000,
+		ramNote: '8 GB+ RAM recommended',
+	},
+	{
+		id: 'qwen2.5-1.5b',
+		label: 'Qwen2.5 1.5B (light)',
+		filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
+		url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
+		sizeBytes: 1_100_000_000,
+		ramNote: '4 GB+ RAM, older PCs',
+	},
+];
+
+export const DEFAULT_MODEL_FILENAME = MODEL_CATALOG[0].filename;
+export const DEFAULT_MODEL_URL = MODEL_CATALOG[0].url;
 
 export function defaultModelPath() {
 	return path.join(ROOT_DIR, 'models', DEFAULT_MODEL_FILENAME);
+}
+
+/** Find a catalog entry by id; falls back to the default (first) entry. */
+export function modelById(id) {
+	return MODEL_CATALOG.find((m) => m.id === id) ?? MODEL_CATALOG[0];
+}
+
+/** Which catalog entries already have their file on disk? */
+export function modelAvailability() {
+	return MODEL_CATALOG.map((m) => {
+		const p = path.join(ROOT_DIR, 'models', m.filename);
+		let present = false;
+		try {
+			present = statSync(p).size >= 1024 * 1024;
+		} catch {
+			present = false;
+		}
+		return { id: m.id, label: m.label, sizeBytes: m.sizeBytes, ramNote: m.ramNote, present, path: p };
+	});
 }
 
 const MIN_VALID_MODEL_BYTES = 1024 * 1024; // 1 MiB sanity floor; the real model is ~4.4 GiB

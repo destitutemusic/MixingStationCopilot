@@ -1,6 +1,6 @@
 {
   "name": "mixing-station-copilot",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Natural-language mixer copilot: chat UI + local Functionary LLM + Mixing Station via MsMcp",
   "license": "Apache-2.0",
   "type": "module",

@@ -89,6 +89,11 @@
   .progressWrap { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin: 10px 0 4px; }
   #progressBar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
   #progressText { font-size: 12px; color: var(--muted); }
+  .modelChoice { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; margin: 6px 0; border: 1px solid var(--border, #333); border-radius: 8px; cursor: pointer; }
+  .modelChoice:hover { border-color: var(--accent, #5b9bd5); }
+  .modelChoice input { margin-top: 3px; }
+  .modelChoice .mLabel { font-weight: 600; }
+  .modelChoice .mMeta { font-size: 12px; color: var(--muted); display: block; }
   #msCard { display: none; }
   #msCard.visible { display: block; }
   #llamaCard { display: none; }
@@ -135,9 +140,10 @@
       <p class="sub">Checking everything the copilot needs to control your mixer.</p>
       <ul class="steps" id="steps"></ul>
       <div class="card" id="downloadCard">
-        <h3>Download the AI model</h3>
-        <p>The local voice model (<code>functionary-small-v2.5.Q4_0.gguf</code>, ~4.4&nbsp;GB) is not present yet. It will be downloaded from Hugging Face, then the model server starts automatically.</p>
-        <button class="btn primary" id="downloadBtn">Download model</button>
+        <h3>Choose and download the AI model</h3>
+        <p>Pick the model to run on this machine. It downloads once from Hugging Face, then the model server starts automatically.</p>
+        <div id="modelChoices"></div>
+        <button class="btn primary" id="downloadBtn" disabled>Pick a model above</button>
         <div class="progressWrap"><div id="progressBar"></div></div>
         <div id="progressText"></div>
       </div>

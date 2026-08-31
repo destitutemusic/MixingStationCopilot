@@ -1,16 +1,29 @@
-# Mixing Station Copilot v0.1.0
+# Mixing Station Copilot v0.1.3
 
 Control your mixer with natural language. A local Functionary LLM turns chat
 messages into Mixing Station parameter changes through MsMcp.
 
 ## Install (3 steps)
 
-1. **Install Node.js 20+** from https://nodejs.org
+1. **Install Node.js 20+**
+   - Windows (PowerShell): `winget install OpenJS.NodeJS.LTS`
+   - Or download from https://nodejs.org
 2. **Unzip** this archive
-3. **Double-click `start.sh`** (Linux/macOS) or **`start.bat`** (Windows)
+3. **Double-click `start.bat`** (Windows) or run `./start.sh` (Linux/macOS)
 
-The first run downloads the AI model (~4.4 GB) and guides you through the
-Mixing Station connection.
+The first run asks you to pick an AI model (see below) and guides you through
+the Mixing Station connection.
+
+## Choose your model (first run)
+
+| Model | Download | RAM needed | Best for |
+|---|---|---|---|
+| **Functionary Small 2.5** (recommended) | ~4.4 GB | 8 GB+ | Best tool-calling accuracy; needs a reasonably modern PC |
+| **Qwen2.5 1.5B** (light) | ~1.0 GB | 4 GB+ | Older/weaker PCs; slower to understand complex requests |
+
+The setup screen shows a model picker before downloading. If the download
+fails or the chat feels unresponsive on your machine, delete the file in
+`models/` and pick the other model on the next start.
 
 ## Mixing Station setup
 
