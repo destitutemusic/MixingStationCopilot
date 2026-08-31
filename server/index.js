@@ -98,6 +98,7 @@ async function serveStatic(req, res, urlPath) {
 async function main() {
 	const cliArgs = parseArgs(process.argv.slice(2));
 	const config = await loadConfig(cliArgs);
+	const cliModelPath = process.argv.includes('--model-path');
 
 	const state = {
 		config,
@@ -157,6 +158,18 @@ async function main() {
 	// ---- llama-server sidecar ----
 	async function startSidecar() {
 		if (state.shuttingDown || config.noLlama || state.llama) return;
+		// Persist the user's model choice across restarts: unless --model-path was
+		// passed, reuse whichever catalog model already exists on disk instead of
+		// always defaulting to Functionary and re-showing the download screen.
+		if (!cliModelPath) {
+			const found = modelAvailability().find((m) => m.present);
+			if (found) {
+				config.modelPath = found.path;
+				const entry = MODEL_CATALOG.find((m) => m.filename === path.basename(found.path));
+				if (entry) config.modelUrl = entry.url;
+				console.log(`[setup] using existing model: ${path.basename(found.path)}`);
+			}
+		}
 		const binary = checkLlamaBinary();
 		if (!binary.ok) {
 			state.llamaError = binary.error;

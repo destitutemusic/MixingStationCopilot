@@ -1,6 +1,49 @@
+import { request as httpRequest } from 'node:http';
 import { createMsMcpServer } from '../vendor/msmcp/msmcp-server.js';
 
 const MAX_ITERATIONS = 10;
+// This host is slow (2 cores, ~1s/token prompt eval): a full system prompt +
+// tools can take several minutes just to reach the first token. undici's
+// default 300s header timeout would abort every long generation, so use a
+// raw http request with a generous timeout instead of fetch().
+const LLAMA_REQUEST_TIMEOUT_MS = 2.5 * 60 * 60 * 1000;
+
+/** POST a JSON body to the llama-server endpoint, returning parsed JSON. */
+function llamaRequest(baseUrl, path, body, timeoutMs = LLAMA_REQUEST_TIMEOUT_MS) {
+	return new Promise((resolve, reject) => {
+		const url = new URL(path, baseUrl);
+		const payload = JSON.stringify(body);
+		const req = httpRequest(
+			{
+				hostname: url.hostname,
+				port: url.port,
+				path: url.pathname,
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+				timeout: timeoutMs,
+			},
+			(res) => {
+				const chunks = [];
+				res.on('data', (chunk) => chunks.push(chunk));
+				res.on('end', () => {
+					const text = Buffer.concat(chunks).toString('utf8');
+					if (res.statusCode !== 200) {
+						reject(new Error(`llama-server chat error: HTTP ${res.statusCode} — ${text.slice(0, 300)}`));
+						return;
+					}
+					try {
+						resolve(JSON.parse(text));
+					} catch (error) {
+						reject(new Error(`llama-server returned invalid JSON: ${text.slice(0, 300)}`));
+					}
+				});
+			}
+		);
+		req.on('timeout', () => req.destroy(new Error(`llama-server request timed out after ${timeoutMs}ms`)));
+		req.on('error', reject);
+		req.end(payload);
+	});
+}
 
 // Generic tools exposed to the LLM. MsMcp also registers one get/set tool per
 // discovered parameter (dozens on a real mixer); a small local model cannot
@@ -32,6 +75,15 @@ function systemPromptFor(parameters) {
 	lines.push("");
 	lines.push("Semantics: mix.on == true means the channel is AUDIBLE (not muted). To mute a channel, set its mix.on to false.");
 	lines.push("Faders (mix.lvl) are in dB. Channel numbering starts at 0 (ch.0 = channel 1).");
+	lines.push("");
+	lines.push('EXAMPLES — always respond with a real tool call, never write tool calls as text:');
+	lines.push('User: "mute channel 3" -> call mixer.set with {"path": "ch.2.mix.on", "value": false}');
+	lines.push('User: "unmute channel 3" -> call mixer.set with {"path": "ch.2.mix.on", "value": true}');
+	lines.push('User: "set channel 1 fader to -10" -> call mixer.set with {"path": "ch.0.mix.lvl", "value": -10}');
+	lines.push('User: "set channels 1 to 8 faders to 0" -> use mixer.batch with calls [{"path":"ch.0.mix.lvl","value":0},{"path":"ch.1.mix.lvl","value":0}, ... for ch.2..ch.7]');
+	lines.push('User: "what is the level on channel 1" -> call mixer.get with {"path": "ch.0.mix.lvl"} then answer with the value');
+	lines.push('User: "which channels are muted" -> use mixer.list_parameters first, then mixer.get on each ch.N.mix.on');
+	lines.push('Rules: channel numbering starts at 0 (ch.0 = channel 1). Faders are dB values between -90 and 10.');
 	return lines.join("\n");
 }
 
@@ -70,23 +122,14 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 	let chain = Promise.resolve();
 
 	async function complete(messages) {
-		const res = await fetch(`${llamaBaseUrl}/v1/chat/completions`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				model: 'functionary-small',
-				messages,
-				tools,
-				tool_choice: 'auto',
-				temperature: 0.2,
-				max_tokens: 1024,
-			}),
+		const data = await llamaRequest(llamaBaseUrl, '/v1/chat/completions', {
+			model: 'functionary-small',
+			messages,
+			tools,
+			tool_choice: 'auto',
+			temperature: 0.2,
+			max_tokens: 1024,
 		});
-		if (!res.ok) {
-			const body = await res.text();
-			throw new Error(`llama-server chat error: HTTP ${res.status} — ${body.slice(0, 300)}`);
-		}
-		const data = await res.json();
 		return data.choices?.[0]?.message;
 	}
 

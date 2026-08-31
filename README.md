@@ -1,4 +1,4 @@
-# Mixing Station Copilot v0.1.3
+# Mixing Station Copilot v0.1.4
 
 Control your mixer with natural language. A local Functionary LLM turns chat
 messages into Mixing Station parameter changes through MsMcp.
