@@ -123,7 +123,7 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 
 	async function complete(messages) {
 		const data = await llamaRequest(llamaBaseUrl, '/v1/chat/completions', {
-			model: 'functionary-small',
+			model: 'local-model',
 			messages,
 			tools,
 			tool_choice: 'auto',
@@ -150,6 +150,50 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 		}
 	}
 
+	/**
+	 * Parse tool calls from model text output as a fallback when the model emits
+	 * tool calls as text content (e.g. Hermes 3's <tool_call> format)
+	 * instead of native tool_calls objects. Returns an array of parsed calls
+	 * in the same shape as OpenAI's tool_calls format.
+	 */
+	function parseTextToolCalls(content) {
+		if (!content || typeof content !== 'string') return [];
+		const calls = [];
+		// Hermes 3 format: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
+		const hermes3Re = /<tool_call>\s*(\{[^<]+?\})\s*<\/tool_call>/gi;
+		let m;
+		while ((m = hermes3Re.exec(content)) !== null) {
+			try {
+				const obj = JSON.parse(m[1]);
+				const name = obj.name ?? obj.function?.name;
+				const args = obj.arguments ?? obj.function?.arguments ?? {};
+				if (name) calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) } });
+			} catch {}
+		}
+		if (calls.length > 0) return calls;
+		// Hermes 2 / Functionary text format: <tool_call>\nfunction_name\n{json_args}\n</tool_call>
+		const hermes2Re = /<tool_call>\s*\n?([^\n<]+)\n?(\{[^<]+?\})\s*<\/tool_call>/gi;
+		while ((m = hermes2Re.exec(content)) !== null) {
+			try {
+				const name = m[1].trim();
+				const args = JSON.parse(m[2]);
+				if (name) calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+			} catch {}
+		}
+		if (calls.length > 0) return calls;
+		// Qwen text format: <tool_call>name\n{arguments json}\n</tool_call>
+		const qwenRe = /<tool_call>\s*\n?([a-zA-Z0-9_.]+)\n?(\{[^<]+?\})\s*<\/tool_call>/gi;
+		while ((m = qwenRe.exec(content)) !== null) {
+			try {
+				const name = m[1].trim();
+				const obj = JSON.parse(m[2]);
+				const args = obj.arguments ?? obj;
+				calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) } });
+			} catch {}
+		}
+		return calls;
+	}
+
 	async function chat(userMessage, { history = [] } = {}) {
 		// Serialize chats: llama-server is a single model instance.
 		const run = chain.then(async () => {
@@ -158,11 +202,22 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 				const message = await complete(messages);
 				if (!message) throw new Error('llama-server returned an empty response');
 				const toolCalls = message.tool_calls ?? [];
-				if (toolCalls.length === 0) {
+				// Fallback: if model emitted tool calls as text content (Hermes, Qwen),
+				// parse them out rather than returning the raw text.
+				if (toolCalls.length === 0 && message.content) {
+					const textCalls = parseTextToolCalls(message.content);
+					if (textCalls.length > 0) {
+						// Re-enter the loop with the parsed calls
+						message.tool_calls = textCalls;
+						message.content = null;
+					}
+				}
+				const finalToolCalls = message.tool_calls ?? [];
+				if (finalToolCalls.length === 0) {
 					return message.content ?? '';
 				}
-				messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: toolCalls });
-				for (const call of toolCalls) {
+				messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: finalToolCalls });
+				for (const call of finalToolCalls) {
 					let args = {};
 					try {
 						args = JSON.parse(call.function?.arguments ?? '{}');
