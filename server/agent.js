@@ -55,7 +55,7 @@ function toolResultText(result) {
 // text format; we parse them from the response.
 // ---------------------------------------------------------------------------
 
-const TOOL_CALL_PATTERN = /TOOL_CALL:\s*(\S+)\s*\nARGS:\s*(\{[^}]*\})\s*\n/gi;
+const TOOL_CALL_PATTERN = /TOOL_CALL:\s*(\S+)\s*\nARGS:\s*(\{[^}]*\})/gi;
 
 /**
  * Parse structured tool calls from model text output.
@@ -186,7 +186,8 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 				});
 
 				const content = data.choices?.[0]?.message?.content ?? '';
-				console.log('[agent] model output:', content.slice(0, 400));
+				console.log('[agent] model output:', JSON.stringify(content.slice(0, 400)));
+				console.log('[agent] has newlines:', content.includes('\n'));
 
 				// Parse tool calls from text
 				const toolCalls = parseToolCalls(content);
