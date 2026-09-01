@@ -201,12 +201,19 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 			for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
 				const message = await complete(messages);
 				if (!message) throw new Error('llama-server returned an empty response');
+				// Debug: show what the model actually produced
+				console.log('[agent] model output:', JSON.stringify({
+					content: message.content?.slice(0, 200),
+					tool_calls: message.tool_calls?.length ?? 0,
+					finish_reason: data.choices?.[0]?.finish_reason,
+				}));
 				const toolCalls = message.tool_calls ?? [];
 				// Fallback: if model emitted tool calls as text content (Hermes, Qwen),
 				// parse them out rather than returning the raw text.
 				if (toolCalls.length === 0 && message.content) {
 					const textCalls = parseTextToolCalls(message.content);
 					if (textCalls.length > 0) {
+						console.log('[agent] parsed text tool calls:', textCalls.length);
 						// Re-enter the loop with the parsed calls
 						message.tool_calls = textCalls;
 						message.content = null;
@@ -214,6 +221,7 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 				}
 				const finalToolCalls = message.tool_calls ?? [];
 				if (finalToolCalls.length === 0) {
+					console.log('[agent] no tool calls, returning text');
 					return message.content ?? '';
 				}
 				messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: finalToolCalls });
@@ -225,7 +233,8 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 						args = { _error: 'malformed tool arguments' };
 					}
 					const result = await executeTool(call.function?.name, args);
-					messages.push({ role: 'tool', tool_call_id: call.id, content: result });
+								console.log(`[agent] tool ${call.function?.name}(${JSON.stringify(args)}) => ${result?.slice(0, 100)}`);
+								messages.push({ role: 'tool', tool_call_id: call.id, content: result });
 				}
 			}
 			throw new Error(`agent loop exceeded ${MAX_ITERATIONS} iterations`);
