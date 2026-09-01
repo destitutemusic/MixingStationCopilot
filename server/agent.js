@@ -203,9 +203,8 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 				if (!message) throw new Error('llama-server returned an empty response');
 				// Debug: show what the model actually produced
 				console.log('[agent] model output:', JSON.stringify({
-					content: message.content?.slice(0, 200),
-					tool_calls: message.tool_calls?.length ?? 0,
-					finish_reason: data.choices?.[0]?.finish_reason,
+					content: message.content?.slice(0, 300),
+					tool_calls: message.tool_calls ?? [],
 				}));
 				const toolCalls = message.tool_calls ?? [];
 				// Fallback: if model emitted tool calls as text content (Hermes, Qwen),
