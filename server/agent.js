@@ -2,10 +2,6 @@ import { request as httpRequest } from 'node:http';
 import { createMsMcpServer } from '../vendor/msmcp/msmcp-server.js';
 
 const MAX_ITERATIONS = 10;
-// This host is slow (2 cores, ~1s/token prompt eval): a full system prompt +
-// tools can take several minutes just to reach the first token. undici's
-// default 300s header timeout would abort every long generation, so use a
-// raw http request with a generous timeout instead of fetch().
 const LLAMA_REQUEST_TIMEOUT_MS = 2.5 * 60 * 60 * 1000;
 
 /** POST a JSON body to the llama-server endpoint, returning parsed JSON. */
@@ -45,65 +41,6 @@ function llamaRequest(baseUrl, path, body, timeoutMs = LLAMA_REQUEST_TIMEOUT_MS)
 	});
 }
 
-// Generic tools exposed to the LLM. MsMcp also registers one get/set tool per
-// discovered parameter (dozens on a real mixer); a small local model cannot
-// fit that many tool definitions in its context window, so the LLM talks to
-// the mixer through the generic tools and the parameter list injected into
-// the system prompt (see buildSystemPrompt).
-const GENERIC_TOOL_NAMES = new Set([
-	'mixer.list_parameters',
-	'mixer.get',
-	'mixer.set',
-	'mixer.batch',
-	'mixer.scene.list',
-	'mixer.scene.get_current',
-	'mixer.scene.recall',
-]);
-
-function systemPromptFor(parameters) {
-	const lines = [
-		"You are Mixing Station Copilot, a mixer assistant. You control the mixer through tool calls.",
-		"After making a change, announce what you did in plain language (e.g. \"I've set channel 3's fader to -5 dB\").",
-		"Confirm before destructive bulk actions.",
-		"",
-		"Available parameter paths:",
-	];
-	for (const p of parameters) {
-		const unit = p.unit ? ` ${p.unit}` : '';
-		lines.push(`  ${p.path} — ${p.label} (${p.type}${unit})`);
-	}
-	lines.push("");
-	lines.push("Semantics: mix.on == true means the channel is AUDIBLE (not muted). To mute a channel, set its mix.on to false.");
-	lines.push("Faders (mix.lvl) are in dB. Channel numbering starts at 0 (ch.0 = channel 1).");
-	lines.push("");
-	lines.push('EXAMPLES — always respond with a real tool call, never write tool calls as text:');
-	lines.push('User: "mute channel 3" -> call mixer.set with {"path": "ch.2.mix.on", "value": false}');
-	lines.push('User: "unmute channel 3" -> call mixer.set with {"path": "ch.2.mix.on", "value": true}');
-	lines.push('User: "set channel 1 fader to -10" -> call mixer.set with {"path": "ch.0.mix.lvl", "value": -10}');
-	lines.push('User: "set channels 1 to 8 faders to 0" -> use mixer.batch with calls [{"path":"ch.0.mix.lvl","value":0},{"path":"ch.1.mix.lvl","value":0}, ... for ch.2..ch.7]');
-	lines.push('User: "what is the level on channel 1" -> call mixer.get with {"path": "ch.0.mix.lvl"} then answer with the value');
-	lines.push('User: "which channels are muted" -> use mixer.list_parameters first, then mixer.get on each ch.N.mix.on');
-	lines.push('Rules: channel numbering starts at 0 (ch.0 = channel 1). Faders are dB values between -90 and 10.');
-	return lines.join("\n");
-}
-
-/** Build the OpenAI-compatible tool list from MsMcp's registered tool definitions. */
-function buildTools(registeredTools) {
-	const tools = [];
-	for (const name of GENERIC_TOOL_NAMES) {
-		const tool = registeredTools[name];
-		if (!tool) continue;
-		let parameters = { type: 'object' };
-		if (typeof tool.inputSchema?.toJSONSchema === 'function') {
-			const schema = tool.inputSchema.toJSONSchema();
-			delete schema.$schema; // OpenAI rejects unknown top-level keys
-			parameters = schema;
-		}
-		tools.push({ type: 'function', function: { name, description: tool.description, parameters } });
-	}
-	return tools;
-}
-
 function toolResultText(result) {
 	try {
 		return result.content?.[0]?.text ?? JSON.stringify(result);
@@ -112,135 +49,174 @@ function toolResultText(result) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// TEXT-BASED TOOL CALLING (works with small models that don't support the
+// OpenAI `tools` parameter). The model outputs commands in a structured
+// text format; we parse them from the response.
+// ---------------------------------------------------------------------------
+
+const TOOL_CALL_PATTERN = /TOOL_CALL:\s*(\S+)\s*\nARGS:\s*(\{[^}]*\})\s*\n/gi;
+
+/**
+ * Parse structured tool calls from model text output.
+ * The model is instructed to output:
+ *   TOOL_CALL: tool_name
+ *   ARGS: {"key": "value"}
+ */
+function parseToolCalls(text) {
+	if (!text || typeof text !== 'string') return [];
+	const calls = [];
+	let m;
+	while ((m = TOOL_CALL_PATTERN.exec(text)) !== null) {
+		try {
+			const name = m[1].trim();
+			const args = JSON.parse(m[2]);
+			calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+		} catch {}
+	}
+	return calls;
+}
+
+// ---------------------------------------------------------------------------
+// SYSTEM PROMPT — plain text, no OpenAI tools format. Small models understand
+// this better.
+// ---------------------------------------------------------------------------
+
+function systemPromptFor(parameters) {
+	const lines = [
+		"You are Mixing Station Copilot, a mixer assistant. You control a real mixing console through tool calls.",
+		"",
+		"## How to call tools",
+		"When you need to call a tool, respond with EXACTLY this format:",
+		"",
+		"TOOL_CALL: tool_name",
+		"ARGS: {\"arg\": \"value\"}",
+		"",
+		"You MUST call a tool to make changes. NEVER say you did something without calling a tool.",
+		"After a tool returns a result, tell the user what happened in plain language.",
+		"",
+		"## Available tools",
+		"",
+		"mixer.set — Set a parameter value",
+		"  ARGS: {\"path\": \"parameter_path\", \"value\": the_value}",
+		"  Example: TOOL_CALL: mixer.set",
+		"  ARGS: {\"path\": \"ch.0.mix.on\", \"value\": false}",
+		"",
+		"mixer.get — Read a parameter value",
+		"  ARGS: {\"path\": \"parameter_path\"}",
+		"  Example: TOOL_CALL: mixer.get",
+		"  ARGS: {\"path\": \"ch.0.mix.lvl\"}",
+		"",
+		"mixer.batch — Set up to 128 parameters at once",
+		"  ARGS: {\"calls\": [{\"path\": \"ch.0.mix.lvl\", \"value\": 0}, ...]}",
+		"",
+		"mixer.list_parameters — List all available parameters (call this if unsure about paths)",
+		"  ARGS: {}",
+		"",
+		"## Parameter paths (channel numbering starts at 0: ch.0 = channel 1)",
+		"",
+	];
+	for (const p of parameters) {
+		const unit = p.unit ? ` (${p.unit})` : '';
+		lines.push(`  ${p.path} — ${p.label} (${p.type}${unit})`);
+	}
+	lines.push("");
+	lines.push("## Semantics");
+	lines.push("mix.on == true means the channel is AUDIBLE (not muted). To mute, set mix.on to false.");
+	lines.push("Faders (mix.lvl) are in dB, range -90 to 10.");
+	lines.push("");
+	lines.push("## Examples");
+	lines.push('User: "mute channel 3" ->');
+	lines.push('TOOL_CALL: mixer.set');
+	lines.push('ARGS: {"path": "ch.2.mix.on", "value": false}');
+	lines.push("");
+	lines.push('User: "unmute channel 3" ->');
+	lines.push('TOOL_CALL: mixer.set');
+	lines.push('ARGS: {"path": "ch.2.mix.on", "value": true}');
+	lines.push("");
+	lines.push('User: "set channel 1 fader to -10" ->');
+	lines.push('TOOL_CALL: mixer.set');
+	lines.push('ARGS: {"path": "ch.0.mix.lvl", "value": -10}');
+	lines.push("");
+	lines.push('User: "what is the level on channel 1" ->');
+	lines.push('TOOL_CALL: mixer.get');
+	lines.push('ARGS: {"path": "ch.0.mix.lvl"}');
+	lines.push("");
+	lines.push('User: "set channels 1 to 8 faders to 0" ->');
+	lines.push('TOOL_CALL: mixer.batch');
+	lines.push('ARGS: {"calls": [{"path":"ch.0.mix.lvl","value":0},{"path":"ch.1.mix.lvl","value":0},{"path":"ch.2.mix.lvl","value":0},{"path":"ch.3.mix.lvl","value":0},{"path":"ch.4.mix.lvl","value":0},{"path":"ch.5.mix.lvl","value":0},{"path":"ch.6.mix.lvl","value":0},{"path":"ch.7.mix.lvl","value":0}]}');
+	return lines.join("\n");
+}
+
+async function executeTool(name, args, registeredTools, onEvent) {
+	const tool = registeredTools[name];
+	if (!tool) {
+		return JSON.stringify({ error: `unknown tool: ${name}` });
+	}
+	try {
+		const result = await tool.handler(args);
+		const text = toolResultText(result);
+		onEvent({ type: 'tool', name, args, result: text });
+		return text;
+	} catch (error) {
+		const text = JSON.stringify({ error: error.message });
+		onEvent({ type: 'tool', name, args, result: text, failed: true });
+		return text;
+	}
+}
+
 export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} }) {
-	// MsMcp is the single source of truth for both tool schemas and handlers.
 	const mcpServer = createMsMcpServer(gateway);
 	const registeredTools = mcpServer._registeredTools ?? {};
-	const tools = buildTools(registeredTools);
 	const systemPrompt = systemPromptFor(gateway.getParameters());
 
 	let chain = Promise.resolve();
 
-	async function complete(messages) {
-		const data = await llamaRequest(llamaBaseUrl, '/v1/chat/completions', {
-			model: 'local-model',
-			messages,
-			tools,
-			tool_choice: 'auto',
-			temperature: 0.2,
-			max_tokens: 1024,
-		});
-		return data.choices?.[0]?.message;
-	}
-
-	async function executeTool(name, args) {
-		const tool = registeredTools[name];
-		if (!tool) {
-			return JSON.stringify({ error: `unknown tool: ${name}` });
-		}
-		try {
-			const result = await tool.handler(args);
-			const text = toolResultText(result);
-			onEvent({ type: 'tool', name, args, result: text });
-			return text;
-		} catch (error) {
-			const text = JSON.stringify({ error: error.message });
-			onEvent({ type: 'tool', name, args, result: text, failed: true });
-			return text;
-		}
-	}
-
-	/**
-	 * Parse tool calls from model text output as a fallback when the model emits
-	 * tool calls as text content (e.g. Hermes 3's <tool_call> format)
-	 * instead of native tool_calls objects. Returns an array of parsed calls
-	 * in the same shape as OpenAI's tool_calls format.
-	 */
-	function parseTextToolCalls(content) {
-		if (!content || typeof content !== 'string') return [];
-		const calls = [];
-		// Hermes 3 format: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
-		const hermes3Re = /<tool_call>\s*(\{[^<]+?\})\s*<\/tool_call>/gi;
-		let m;
-		while ((m = hermes3Re.exec(content)) !== null) {
-			try {
-				const obj = JSON.parse(m[1]);
-				const name = obj.name ?? obj.function?.name;
-				const args = obj.arguments ?? obj.function?.arguments ?? {};
-				if (name) calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) } });
-			} catch {}
-		}
-		if (calls.length > 0) return calls;
-		// Hermes 2 / Functionary text format: <tool_call>\nfunction_name\n{json_args}\n</tool_call>
-		const hermes2Re = /<tool_call>\s*\n?([^\n<]+)\n?(\{[^<]+?\})\s*<\/tool_call>/gi;
-		while ((m = hermes2Re.exec(content)) !== null) {
-			try {
-				const name = m[1].trim();
-				const args = JSON.parse(m[2]);
-				if (name) calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
-			} catch {}
-		}
-		if (calls.length > 0) return calls;
-		// Qwen text format: <tool_call>name\n{arguments json}\n</tool_call>
-		const qwenRe = /<tool_call>\s*\n?([a-zA-Z0-9_.]+)\n?(\{[^<]+?\})\s*<\/tool_call>/gi;
-		while ((m = qwenRe.exec(content)) !== null) {
-			try {
-				const name = m[1].trim();
-				const obj = JSON.parse(m[2]);
-				const args = obj.arguments ?? obj;
-				calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) } });
-			} catch {}
-		}
-		return calls;
-	}
-
 	async function chat(userMessage, { history = [] } = {}) {
-		// Serialize chats: llama-server is a single model instance.
 		const run = chain.then(async () => {
 			const messages = [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }];
+
 			for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
-				const message = await complete(messages);
-				if (!message) throw new Error('llama-server returned an empty response');
-				// Debug: show what the model actually produced
-				console.log('[agent] model output:', JSON.stringify({
-					content: message.content?.slice(0, 300),
-					tool_calls: message.tool_calls ?? [],
-				}));
-				const toolCalls = message.tool_calls ?? [];
-				// Fallback: if model emitted tool calls as text content (Hermes, Qwen),
-				// parse them out rather than returning the raw text.
-				if (toolCalls.length === 0 && message.content) {
-					const textCalls = parseTextToolCalls(message.content);
-					if (textCalls.length > 0) {
-						console.log('[agent] parsed text tool calls:', textCalls.length);
-						// Re-enter the loop with the parsed calls
-						message.tool_calls = textCalls;
-						message.content = null;
-					}
-				}
-				const finalToolCalls = message.tool_calls ?? [];
-				if (finalToolCalls.length === 0) {
+				// Send to llama-server — NO tools parameter, just messages
+				const data = await llamaRequest(llamaBaseUrl, '/v1/chat/completions', {
+					model: 'local-model',
+					messages,
+					temperature: 0.2,
+					max_tokens: 512,
+				});
+
+				const content = data.choices?.[0]?.message?.content ?? '';
+				console.log('[agent] model output:', content.slice(0, 400));
+
+				// Parse tool calls from text
+				const toolCalls = parseToolCalls(content);
+
+				if (toolCalls.length === 0) {
 					console.log('[agent] no tool calls, returning text');
-					return message.content ?? '';
+					return content;
 				}
-				messages.push({ role: 'assistant', content: message.content ?? null, tool_calls: finalToolCalls });
-				for (const call of finalToolCalls) {
+
+				// Execute tool calls
+				console.log(`[agent] executing ${toolCalls.length} tool call(s)`);
+				messages.push({ role: 'assistant', content });
+				for (const call of toolCalls) {
 					let args = {};
 					try {
 						args = JSON.parse(call.function?.arguments ?? '{}');
 					} catch {
 						args = { _error: 'malformed tool arguments' };
 					}
-					const result = await executeTool(call.function?.name, args);
-								console.log(`[agent] tool ${call.function?.name}(${JSON.stringify(args)}) => ${result?.slice(0, 100)}`);
-								messages.push({ role: 'tool', tool_call_id: call.id, content: result });
+					const result = await executeTool(call.function?.name, args, registeredTools, onEvent);
+					console.log(`[agent] tool ${call.function?.name}(${JSON.stringify(args)}) => ${result?.slice(0, 200)}`);
+					messages.push({ role: 'user', content: `Tool result for ${call.function?.name}:\n${result}` });
 				}
+				// Continue loop so model can read the tool result and respond
 			}
-			throw new Error(`agent loop exceeded ${MAX_ITERATIONS} iterations`);
+			return 'I made too many tool calls. Please try again.';
 		});
 		chain = run.catch(() => {});
 		return run;
 	}
 
-	return { chat, systemPrompt, tools };
+	return { chat, systemPrompt, tools: [] };
 }
