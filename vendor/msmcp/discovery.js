@@ -4,11 +4,11 @@ const PROBE_GROUPS = [
     { group: 'buses', prefix: 'bus', count: 16, label: 'Bus' },
     { group: 'dcas', prefix: 'dca', count: 8, label: 'DCA' },
 ];
-const PROBE_KEYS = ['mix.lvl', 'mix.mute', 'mix.pan'];
+const PROBE_KEYS = ['mix.lvl', 'mix.on', 'mix.pan'];
 function labelForKey(key) {
     if (key === 'mix.lvl')
         return 'Fader';
-    if (key === 'mix.mute')
+    if (key === 'mix.on')
         return 'Mute';
     if (key === 'mix.pan')
         return 'Pan';
@@ -28,7 +28,7 @@ function unitForKey(key) {
  * back to value inspection.
  */
 function typeForKeyValue(key, value) {
-    if (key === 'mix.mute')
+    if (key === 'mix.on')
         return 'bool';
     if (key === 'mix.lvl' || key === 'mix.pan')
         return 'float';
