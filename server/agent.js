@@ -67,11 +67,31 @@ function parseToolCalls(text) {
 	if (!text || typeof text !== 'string') return [];
 	const calls = [];
 	let m;
-	while ((m = TOOL_CALL_PATTERN.exec(text)) !== null) {
+	const re = new RegExp(TOOL_CALL_PATTERN.source, 'gi');
+	while ((m = re.exec(text)) !== null) {
 		try {
 			const name = m[1].trim();
 			const args = JSON.parse(m[2]);
 			calls.push({ id: `text_call_${calls.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+		} catch {}
+	}
+	if (calls.length > 0) return calls;
+	// Truncated JSON repair: if content has TOOL_CALL + ARGS but JSON was cut off
+	// by max_tokens, try to close the brackets and parse what we can.
+	const truncatedMatch = text.match(/TOOL_CALL:\s*(\S+)\s*\nARGS:\s*(\{.*)/is);
+	if (truncatedMatch) {
+		const name = truncatedMatch[1].trim();
+		let jsonStr = truncatedMatch[2];
+		// Close any open brackets/braces
+		const opens = (jsonStr.match(/{/g) || []).length;
+		const closes = (jsonStr.match(/}/g) || []).length;
+		const arrOpens = (jsonStr.match(/\[/g) || []).length;
+		const arrCloses = (jsonStr.match(/]/g) || []).length;
+		jsonStr += ']'.repeat(Math.max(0, arrOpens - arrCloses));
+		jsonStr += '}'.repeat(Math.max(0, opens - closes));
+		try {
+			const args = JSON.parse(jsonStr);
+			calls.push({ id: `text_call_0`, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 		} catch {}
 	}
 	return calls;
@@ -122,6 +142,7 @@ function systemPromptFor(parameters) {
 	}
 	lines.push("");
 	lines.push("## Semantics");
+	lines.push("CRITICAL: Channel numbering is 0-indexed. 'Channel 1' = ch.0, 'Channel 2' = ch.1, 'Channel 3' = ch.2. Subtract 1 from the user's channel number.");
 	lines.push("mix.on == true means the channel is AUDIBLE (not muted). To mute, set mix.on to false.");
 	lines.push("Faders (mix.lvl) are in dB, range -90 to 10.");
 	lines.push("");
@@ -182,7 +203,7 @@ export async function createAgent({ gateway, llamaBaseUrl, onEvent = () => {} })
 					model: 'local-model',
 					messages,
 					temperature: 0.2,
-					max_tokens: 512,
+					max_tokens: 1024,
 				});
 
 				const content = data.choices?.[0]?.message?.content ?? '';
