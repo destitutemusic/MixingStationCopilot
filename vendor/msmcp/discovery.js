@@ -1,7 +1,7 @@
 const DEFAULT_CONCURRENCY = 10;
 const PROBE_GROUPS = [
-    { group: 'channels', prefix: 'ch', count: 32, label: 'Channel' },
-    { group: 'buses', prefix: 'bus', count: 16, label: 'Bus' },
+    { group: 'channels', prefix: 'ch', count: 16, label: 'Channel' },
+    { group: 'buses', prefix: 'bus', count: 8, label: 'Bus' },
     { group: 'dcas', prefix: 'dca', count: 8, label: 'DCA' },
 ];
 const PROBE_KEYS = ['mix.lvl', 'mix.on', 'mix.pan', 'preamp.filter.0.on', 'preamp.filter.0.freq', 'peq.on'];

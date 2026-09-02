@@ -46,7 +46,7 @@ export function startLlama({ port, modelPath, onLog = () => {} }) {
 	// Memory is tight on typical hosts (this project targets ~5.7 GB boxes): a
 	// single slot and explicit 4k context keep the KV cache + compute buffers
 	// small enough to malloc, which llama.cpp's fit check would otherwise abort on.
-	const args = ['--model', modelPath, '--port', String(port), '--host', '0.0.0.0', '--jinja', '--parallel', '1', '--ctx-size', '4096'];
+	const args = ['--model', modelPath, '--port', String(port), '--host', '0.0.0.0', '--jinja', '--parallel', '1', '--ctx-size', '8192'];
 	const child = spawn(binaryPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
 
 	const logs = [];
