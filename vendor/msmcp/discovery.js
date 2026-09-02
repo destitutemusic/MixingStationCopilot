@@ -4,7 +4,7 @@ const PROBE_GROUPS = [
     { group: 'buses', prefix: 'bus', count: 8, label: 'Bus' },
     { group: 'dcas', prefix: 'dca', count: 8, label: 'DCA' },
 ];
-const PROBE_KEYS = ['mix.lvl', 'mix.on', 'mix.pan', 'preamp.filter.0.on', 'preamp.filter.0.freq', 'peq.on'];
+const PROBE_KEYS = ['mix.lvl', 'mix.on', 'mix.pan', 'preamp.filter.0.on', 'preamp.filter.0.freq', 'peq.on', 'cfg.name', 'cfg.color'];
 function labelForKey(key) {
     if (key === 'mix.lvl')
         return 'Fader';
@@ -18,6 +18,10 @@ function labelForKey(key) {
         return 'HP Filter Frequency';
     if (key === 'peq.on')
         return 'EQ Enable';
+    if (key === 'cfg.name')
+        return 'Channel Name';
+    if (key === 'cfg.color')
+        return 'Channel Color';
     return key;
 }
 function unitForKey(key) {
@@ -39,6 +43,10 @@ function typeForKeyValue(key, value) {
     if (key === 'mix.on' || key === 'preamp.filter.0.on' || key === 'peq.on')
         return 'bool';
     if (key === 'mix.lvl' || key === 'mix.pan' || key === 'preamp.filter.0.freq')
+        return 'float';
+    if (key === 'cfg.name')
+        return 'string';
+    if (key === 'cfg.color')
         return 'float';
     if (typeof value === 'boolean')
         return 'bool';

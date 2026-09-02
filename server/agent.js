@@ -166,6 +166,14 @@ function systemPromptFor(parameters) {
 	lines.push('User: "set channels 1 to 8 faders to 0" ->');
 	lines.push('TOOL_CALL: mixer.batch');
 	lines.push('ARGS: {"calls": [{"path":"ch.0.mix.lvl","value":0},{"path":"ch.1.mix.lvl","value":0},{"path":"ch.2.mix.lvl","value":0},{"path":"ch.3.mix.lvl","value":0},{"path":"ch.4.mix.lvl","value":0},{"path":"ch.5.mix.lvl","value":0},{"path":"ch.6.mix.lvl","value":0},{"path":"ch.7.mix.lvl","value":0}]}');
+	lines.push("");
+	lines.push('User: "rename channel 1 to Kick" ->');
+	lines.push('TOOL_CALL: mixer.set');
+	lines.push('ARGS: {"path": "ch.0.cfg.name", "value": "Kick"}');
+	lines.push("");
+	lines.push('User: "rename channel 2 to Snare" ->');
+	lines.push('TOOL_CALL: mixer.set');
+	lines.push('ARGS: {"path": "ch.1.cfg.name", "value": "Snare"}');
 	return lines.join("\n");
 }
 
