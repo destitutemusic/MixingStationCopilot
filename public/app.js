@@ -66,32 +66,10 @@
 	async function renderModelChoices() {
 		const res = await fetch('/api/setup/models');
 		const models = await res.json();
-		const wrap = document.getElementById('modelChoices');
-		wrap.innerHTML = '';
-		let selected = null;
-		models.forEach((m, i) => {
-			const label = document.createElement('label');
-			label.className = 'modelChoice';
-			const sizeGb = (m.sizeBytes / 1e9).toFixed(1);
-			label.innerHTML = `<input type="radio" name="modelChoice" value="${m.id}" ${i === 0 ? 'checked' : ''}>` +
-				`<span><span class="mLabel">${m.label}</span>` +
-				`<span class="mMeta">~${sizeGb} GB download \u00b7 ${m.ramNote}${m.present ? ' \u00b7 already downloaded' : ''}</span></span>`;
-			wrap.appendChild(label);
-		});
-		wrap.querySelectorAll('input[name=modelChoice]').forEach((input) => {
-			input.addEventListener('change', () => {
-				selected = input.value;
-				const btn = document.getElementById('downloadBtn');
-				btn.disabled = false;
-				btn.textContent = models.find((m) => m.id === selected).present ? 'Use this model' : 'Download model';
-			});
-		});
-		// default-select first
-		selected = models[0].id;
+		const m = models[0];
 		const btn = document.getElementById('downloadBtn');
-		btn.disabled = false;
-		btn.textContent = models[0].present ? 'Use this model' : 'Download model';
-		window.__selectedModel = () => selected;
+		btn.textContent = m.present ? 'Use this model' : 'Download model';
+		window.__selectedModel = () => m.id;
 	}
 
 	function renderSetup(status) {

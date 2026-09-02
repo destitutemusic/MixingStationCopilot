@@ -1,6 +1,6 @@
-# Mixing Station Copilot v0.1.4
+# Mixing Station Copilot
 
-Control your mixer with natural language. A local Functionary LLM turns chat
+Control your mixer with natural language. A local AI model turns chat
 messages into Mixing Station parameter changes through MsMcp.
 
 ## Install (3 steps)
@@ -11,26 +11,27 @@ messages into Mixing Station parameter changes through MsMcp.
 2. **Unzip** this archive
 3. **Double-click `start.bat`** (Windows) or run `./start.sh` (Linux/macOS)
 
-The first run asks you to pick an AI model (see below) and guides you through
+The first run downloads a small AI model (~400 MB) and guides you through
 the Mixing Station connection.
-
-## Choose your model (first run)
-
-| Model | Download | RAM needed | Best for |
-|---|---|---|---|
-| **Granite 4.0 1B** | ~1.0 GB | 4 GB+ | IBM's tool-calling model, balanced |
-| **MiniCPM5 1B Agentic** | ~0.7 GB | 2 GB+ | Purpose-built function calling, smallest footprint |
-| **Qwen3 0.6B** | ~0.4 GB | 2 GB+ | Fastest, top benchmark score, very light |
-
-The setup screen shows a model picker before downloading. If the download
-fails or the chat feels unresponsive on your machine, delete the file in
-`models/` and pick the other model on the next start.
 
 ## Mixing Station setup
 
 - Connect **Mixing Station Desktop** to your mixer (e.g. X AIR 18).
 - Open the **gear icon menu** and enable the **HTTP REST** API on port `8080`.
 - The copilot connects automatically once the REST API answers.
+
+## What you can do
+
+- Mute/unmute channels: "mute channel 3"
+- Set fader levels: "set channel 1 fader to -10"
+- Batch operations: "set all faders to 0"
+- Rename channels: "rename channel 1 to Kick"
+- Set channel colors: "set channel 1 color to blue"
+- High pass filter: "enable high pass filter on channel 1 at 100hz"
+- Compressor: "turn on compressor on channel 1"
+- EQ: "enable EQ on channel 1"
+- Bus sends: "set send 1 level on channel 1 to -5"
+- Query values: "what is the level on channel 1"
 
 ## Platform notes
 
@@ -45,12 +46,4 @@ fails or the chat feels unresponsive on your machine, delete the file in
 - **Model download interrupted**: the copilot resumes from a fresh start and
   validates the GGUF header before use.
 - **Slow first response**: the local model loads on first start (can take a
-  few minutes on CPU-only machines) and uses ~3.6 GB of RAM.
-
-## Development
-
-```
-npm install
-npm start            # starts the web UI + model server
-npm run build        # syntax-checks all server and UI code
-```
+  minute on CPU-only machines) and uses ~1 GB of RAM.

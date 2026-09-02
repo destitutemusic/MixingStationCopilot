@@ -5,28 +5,12 @@ import { resolveLlamaBinary, ROOT_DIR } from './llama.js';
 
 export const MODEL_CATALOG = [
 	{
-		id: 'granite-4.0-1b',
-		label: 'Granite 4.0 1B',
-		filename: 'granite-4.0-1b-Q4_K_M.gguf',
-		url: 'https://huggingface.co/ibm-granite/granite-4.0-1b-GGUF/resolve/main/granite-4.0-1b-Q4_K_M.gguf',
-		sizeBytes: 1_023_645_440,
-		ramNote: '4 GB+ RAM',
-	},
-	{
-		id: 'minicpm5-1b-agentic',
-		label: 'MiniCPM5 1B Agentic Tooluse',
-		filename: 'MiniCPM5-1B-Agentic-Tooluse-v3.Q4_K_M.gguf',
-		url: 'https://huggingface.co/ewinregirgojr/MiniCPM5-1B-Agentic-Tooluse-v3-GGUF/resolve/main/MiniCPM5-1B-Agentic-Tooluse-v3.Q4_K_M.gguf',
-		sizeBytes: 688_065_856,
-		ramNote: '2 GB+ RAM, purpose-built for function calling',
-	},
-	{
 		id: 'qwen3-0.6b',
 		label: 'Qwen3 0.6B',
 		filename: 'Qwen3-0.6B-Q4_K_M.gguf',
 		url: 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf',
 		sizeBytes: 396_705_472,
-		ramNote: '2 GB+ RAM, top benchmark score for its size',
+		ramNote: '2 GB+ RAM',
 	},
 ];
 
