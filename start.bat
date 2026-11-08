@@ -1,37 +1,40 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Mixing Station Copilot
-echo.
 
-where node >nul 2>&1
-if errorlevel 1 (
-  echo Node.js not found. Install Node 20 or newer from https://nodejs.org
-  echo Then run start.bat again.
-  pause
-  exit /b 1
-)
-
-for /f "delims=" %%v in ('node -v') do set NODE_VER=%%v
-echo Found Node %NODE_VER%
-
-if not exist node_modules (
-  echo Installing dependencies, please wait...
-  call npm install --no-audit --no-fund
+set "NODE="
+if exist "runtime\node.exe" set "NODE=runtime\node.exe"
+if not defined NODE if exist "runtime\node" set "NODE=runtime\node"
+if not defined NODE (
+  where node >nul 2>&1
   if errorlevel 1 (
-    echo.
-    echo npm install failed. Check your internet connection.
+    echo No Node runtime found in this folder and no system Node installed.
+    echo Download the Mixing Station Copilot zip again from the release page; it includes its own runtime.
     pause
     exit /b 1
   )
+  set "NODE=node"
+  echo Bundled runtime not found; using the system Node.
+)
+
+if not exist node_modules (
+  where npm >nul 2>&1
+  if errorlevel 1 (
+    echo This copy is missing its dependencies and npm is not available.
+    echo Download the release zip again; it includes everything.
+    pause
+    exit /b 1
+  )
+  echo Installing dependencies ^(first run^)...
+  call npm install --no-audit --no-fund
 )
 
 echo.
-echo Starting Copilot... browser will open at http://localhost:8085
+echo Starting Mixing Station Copilot... your browser will open at http://localhost:8085
 echo Keep this window open while using Copilot. Press Ctrl+C to stop.
 echo.
 start "" http://localhost:8085
-node server/index.js
+"%NODE%" server/index.js
 echo.
 echo Copilot stopped.
 pause

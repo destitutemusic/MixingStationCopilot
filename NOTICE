@@ -1,0 +1,57 @@
+Mixing Station Copilot
+Copyright 2026 Donncha Walsh
+
+Licensed under the Apache License, Version 2.0. You may obtain a copy of the
+License in the LICENSE file distributed with this work, or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+This product includes software developed by Code Pro Quo Ltd
+(https://sonusimmersivus.com).
+
+This application builds on MsMcp (https://github.com/destitutemusic/MsMcp),
+which is a derivative of ConsoleMCP (https://github.com/bulyaki/ConsoleMCP).
+The notice carried by ConsoleMCP is reproduced verbatim below.
+
+    ConsoleMCP
+    Copyright 2026 Code Pro Quo Ltd
+
+    Sonus Immersivus © 2026. Sonus Immersivus is a trading name of Code Pro Quo
+    Ltd, registered in England and Wales, company registration number: 14871521.
+
+    This product includes software developed by Code Pro Quo Ltd
+    (https://sonusimmersivus.com).
+
+    Licensed under the Apache License, Version 2.0. You may obtain a copy of the
+    License in the LICENSE file distributed with this work, or at:
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    If you redistribute this software, in source or object form, you must include
+    the text of this NOTICE file with your distribution — for example in a
+    third-party licences screen, an about box, or a NOTICES/CREDITS document
+    shipped alongside your product.
+
+---
+
+Bundled third-party components
+
+This distribution can download and run the following, each under its own
+licence. See THIRD-PARTY.md for the full list, versions and licence texts.
+
+    llama.cpp (llama-server)      MIT License
+    Qwen3 language models         Apache License 2.0
+    Node.js runtime, if bundled   MIT License
+
+Mixing Station is a third-party application by a separate author. This project
+is not affiliated with, endorsed by, or sponsored by Mixing Station, Code Pro
+Quo Ltd, or Sonus Immersivus. See TRADEMARKS.md.
+
+---
+
+If you redistribute this software, in source or object form, you must include
+the text of this NOTICE file with your distribution — for example in a
+third-party licences screen, an about box, or a NOTICES/CREDITS document
+shipped alongside your product.

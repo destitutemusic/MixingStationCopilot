@@ -1,3 +1,8 @@
 node_modules/
 models/*.gguf
+models/*.part
+bin/**
+!bin/.gitkeep
+dist/
 *.log
+.release-cache/

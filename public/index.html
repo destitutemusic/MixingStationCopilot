@@ -94,6 +94,9 @@
   .modelChoice input { margin-top: 3px; }
   .modelChoice .mLabel { font-weight: 600; }
   .modelChoice .mMeta { font-size: 12px; color: var(--muted); display: block; }
+  .modelChoice .badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--accent, #5b9bd5); color: #fff; margin-left: 6px; vertical-align: middle; }
+  .modelNote { font-size: 12px; color: var(--muted); margin: 10px 0 14px; line-height: 1.45; }
+  #modelChoices { margin: 10px 0 4px; }
   #msCard { display: none; }
   #msCard.visible { display: block; }
   #llamaCard { display: none; }
@@ -140,9 +143,11 @@
       <p class="sub">Checking everything the copilot needs to control your mixer.</p>
       <ul class="steps" id="steps"></ul>
       <div class="card" id="downloadCard">
-        <h3>Download the AI model</h3>
-        <p>Qwen3 0.6B — downloads ~400 MB on first run, then starts automatically.</p>
-        <button class="btn primary" id="downloadBtn">Download model</button>
+        <h3>Choose your AI model</h3>
+        <p class="sub">The model runs on this computer. Bigger models follow instructions and tool calls far more reliably, so a 0.6B model will mis-handle requests a 4B handles cleanly. We pre-select the largest tier that fits this machine comfortably; you can choose another.</p>
+        <div id="modelChoices"></div>
+        <p class="modelNote">This computer reports <b id="ramNote">your</b> of RAM. The AI engine and the model you choose download once, on this first run. Nothing is uploaded.</p>
+        <button class="btn primary" id="downloadBtn">Download &amp; start</button>
         <div class="progressWrap"><div id="progressBar"></div></div>
         <div id="progressText"></div>
       </div>

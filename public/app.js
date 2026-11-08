@@ -15,7 +15,7 @@
 
 	const STEP_LABELS = {
 		node: 'Node.js 20+',
-		'llama-binary': 'llama-server binary',
+		'llama-binary': 'AI engine (llama.cpp)',
 		model: 'AI model file',
 		mixingStation: 'Mixing Station (:8080)',
 		llamaServer: 'Model server (:8090)',
@@ -65,19 +65,48 @@
 
 	async function renderModelChoices() {
 		const res = await fetch('/api/setup/models');
-		const models = await res.json();
-		const m = models[0];
+		const payload = await res.json();
+		const models = payload.models || [];
+		const recommended = payload.recommended || (models[0] && models[0].id);
+		const choices = document.getElementById('modelChoices');
+		choices.innerHTML = '';
+		for (const m of models) {
+			const label = document.createElement('label');
+			label.className = 'modelChoice';
+			const input = document.createElement('input');
+			input.type = 'radio';
+			input.name = 'model';
+			input.value = m.id;
+			input.checked = m.id === recommended;
+			label.appendChild(input);
+			const text = document.createElement('span');
+			text.innerHTML = `<span class="mLabel">${escapeHtml(m.label)}${m.id === recommended ? ' <span class="badge">recommended</span>' : ''}${m.present ? ' \u2014 already downloaded' : ''}</span>` +
+				`<span class="mMeta">${formatBytes(m.sizeBytes)} download \u00b7 ${escapeHtml(m.ramNote)} \u00b7 ${escapeHtml(m.quantisation)} \u00b7 ${escapeHtml(m.licence)}</span>` +
+				`<span class="mMeta">${escapeHtml(m.description)}</span>`;
+			label.appendChild(text);
+			choices.appendChild(label);
+		}
+		const ram = document.getElementById('ramNote');
+		if (ram) ram.textContent = `${payload.ramGb || '?'} GB`;
 		const btn = document.getElementById('downloadBtn');
-		btn.textContent = m.present ? 'Use this model' : 'Download model';
-		window.__selectedModel = () => m.id;
+		const selected = models.find((m) => m.id === recommended);
+		btn.textContent = selected && selected.present ? 'Use this model' : 'Download & start';
+		window.__selectedModel = () => {
+			const chosen = document.querySelector('input[name="model"]:checked');
+			return chosen ? chosen.value : recommended;
+		};
 	}
 
 	function renderSetup(status) {
 		renderSteps(status);
 		const needs = status.needs;
+		const needsInstall = needs === 'model' || needs === 'llama-binary';
 		const cardWasHidden = !$('downloadCard').classList.contains('visible');
-		$('downloadCard').classList.toggle('visible', needs === 'model');
-		if (needs === 'model' && cardWasHidden) renderModelChoices();
+		$('downloadCard').classList.toggle('visible', needsInstall);
+		if (needsInstall && cardWasHidden) {
+			renderModelChoices();
+			pollDownload();
+		}
 		$('msCard').classList.toggle('visible', needs === 'ms');
 		$('llamaCard').classList.toggle('visible', needs === 'llama-start');
 		if (status.ready) {
@@ -112,16 +141,17 @@
 			const res = await fetch('/api/setup/download');
 			const d = await res.json();
 			if (d.state === 'downloading') {
+				const stage = d.stage === 'llama' ? 'AI engine (llama.cpp)' : d.stage === 'model' ? (d.label || 'AI model') : 'Setup';
 				$('progressBar').style.width = `${d.percent || 0}%`;
-				$('progressText').textContent = `Downloading\u2026 ${formatBytes(d.received)}${d.total ? ' / ' + formatBytes(d.total) : ''} (${d.percent || 0}%)`;
+				$('progressText').textContent = `Downloading ${stage}\u2026 ${formatBytes(d.received)}${d.total ? ' / ' + formatBytes(d.total) : ''} (${d.percent || 0}%)`;
 				setTimeout(pollDownload, 500);
 			} else if (d.state === 'done') {
 				$('progressBar').style.width = '100%';
-				$('progressText').textContent = 'Download complete. Starting model server\u2026';
+				$('progressText').textContent = 'Setup complete. Starting the model server\u2026';
 				$('downloadBtn').disabled = false;
 				setTimeout(refreshSetup, 1000);
 			} else if (d.state === 'error') {
-				$('progressText').textContent = `Download failed: ${d.error}`;
+				$('progressText').textContent = d.error || 'Setup failed.';
 				$('downloadBtn').disabled = false;
 			}
 		} catch {
@@ -155,7 +185,7 @@
 				busy = false;
 				setBusy(false);
 				addMessage('error', msg.message);
-			} else if (msg.type === 'download' || msg.type === 'setup') {
+			} else if (msg.type === 'download' || msg.type === 'install' || msg.type === 'setup') {
 				refreshSetup();
 			}
 		};

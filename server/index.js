@@ -10,7 +10,7 @@ import { MsMcpGateway } from '../vendor/msmcp/msmcp-gateway.js';
 
 import { startLlama, stopLlama, checkLlamaBinary } from './llama.js';
 import { createAgent } from './agent.js';
-import { defaultModelPath, DEFAULT_MODEL_URL, downloadModel, runSetupChecks, MODEL_CATALOG, modelById, modelAvailability } from './setup.js';
+import { checkModelFile, defaultModelPath, DEFAULT_MODEL_URL, DEFAULT_MODEL_ID, downloadModel, ensureLlamaBinary, friendlyDownloadError, llamaStatus, MODEL_CATALOG, modelById, modelAvailability, recommendedModelId, runSetupChecks, systemRamGb } from './setup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT_DIR = path.resolve(__dirname, '..');
@@ -28,7 +28,7 @@ const MIME = {
 };
 
 function parseArgs(argv) {
-	const args = { msHost: 'localhost', msPort: 8080, llamaPort: 8090, webPort: 8085, modelPath: defaultModelPath(), modelUrl: DEFAULT_MODEL_URL, noLlama: false };
+	const args = { msHost: 'localhost', msPort: 8080, llamaPort: 8090, llamaHost: null, webPort: 8085, modelPath: defaultModelPath(), modelUrl: DEFAULT_MODEL_URL, noLlama: false };
 	for (let i = 0; i < argv.length; i += 1) {
 		const flag = argv[i];
 		const value = () => {
@@ -36,11 +36,12 @@ function parseArgs(argv) {
 			return argv[i];
 		};
 		if (flag === '--help') {
-			console.log(`Usage: node server/index.js [--ms-host H] [--ms-port P] [--llama-port P] [--web-port P] [--model-path FILE] [--model-url URL] [--no-llama]`);
+			console.log(`Usage: node server/index.js [--ms-host H] [--ms-port P] [--llama-port P] [--llama-host H] [--web-port P] [--model-path FILE] [--model-url URL] [--no-llama]`);
 			process.exit(0);
 		} else if (flag === '--ms-host') args.msHost = value();
 		else if (flag === '--ms-port') args.msPort = Number(value());
 		else if (flag === '--llama-port') args.llamaPort = Number(value());
+		else if (flag === '--llama-host') args.llamaHost = value();
 		else if (flag === '--web-port') args.webPort = Number(value());
 		else if (flag === '--model-path') args.modelPath = path.resolve(value());
 		else if (flag === '--model-url') args.modelUrl = value();
@@ -61,6 +62,7 @@ async function loadConfig(cliArgs) {
 		msHost: cliArgs.msHost,
 		msPort: cliArgs.msPort,
 		llamaPort: cliArgs.llamaPort,
+		llamaHost: cliArgs.llamaHost ?? file.llama?.host ?? '127.0.0.1',
 		webPort: cliArgs.webPort,
 		modelPath: cliArgs.modelPath,
 		modelUrl: cliArgs.modelUrl,
@@ -110,7 +112,8 @@ async function main() {
 		msError: null,
 		llama: null,
 		llamaError: null,
-		download: null, // { state, received, total, percent, error }
+		install: null, // { state, stage, received, total, percent, error, platform }
+		download: null, // legacy alias of install
 		shuttingDown: false,
 	};
 
@@ -158,6 +161,7 @@ async function main() {
 	// ---- llama-server sidecar ----
 	async function startSidecar() {
 		if (state.shuttingDown || config.noLlama || state.llama) return;
+		state.llamaError = null;
 		// Persist the user's model choice across restarts: unless --model-path was
 		// passed, reuse whichever catalog model already exists on disk instead of
 		// always defaulting to Functionary and re-showing the download screen.
@@ -176,8 +180,8 @@ async function main() {
 			return;
 		}
 		try {
-			console.log(`[llama] starting ${binary.path} on port ${config.llamaPort}…`);
-			state.llama = await startLlama({ port: config.llamaPort, modelPath: config.modelPath, onLog: (line) => console.log(`[llama] ${line}`) });
+			console.log(`[llama] starting ${binary.path} on ${config.llamaHost}:${config.llamaPort}…`);
+			state.llama = await startLlama({ port: config.llamaPort, host: config.llamaHost, modelPath: config.modelPath, onLog: (line) => console.log(`[llama] ${line}`) });
 			state.llamaError = null;
 			console.log(`[llama] ready at ${state.llama.baseUrl}`);
 			broadcast({ type: 'setup', ...(await runSetupChecks({ ...config, modelPath: config.modelPath })) });
@@ -202,7 +206,8 @@ async function main() {
 				ok: true,
 				mixingStation: { connected: state.msStatus === 'connected' },
 				llama: { ready: Boolean(state.llama), error: state.llamaError },
-				model: { present: state.config.modelPath !== null },
+				model: { present: checkModelFile(state.config.modelPath).ok, path: state.config.modelPath },
+				platform: llamaStatus().dir,
 			});
 			return;
 		}
@@ -213,51 +218,70 @@ async function main() {
 		}
 
 		if (req.method === 'GET' && pathname === '/api/setup/models') {
-			sendJson(res, 200, modelAvailability());
+			const ramGb = systemRamGb();
+			sendJson(res, 200, {
+				platform: llamaStatus(),
+				ramGb,
+				recommended: recommendedModelId(ramGb),
+				models: modelAvailability(ramGb),
+			});
+			return;
+		}
+
+		if (req.method === 'GET' && pathname === '/api/setup/llama') {
+			sendJson(res, 200, llamaStatus());
 			return;
 		}
 
 		if (req.method === 'GET' && pathname === '/api/setup/download') {
-			sendJson(res, 200, state.download ?? { state: 'idle', percent: 0 });
+			sendJson(res, 200, state.install ?? { state: 'idle', percent: 0 });
 			return;
 		}
 
 		if (req.method === 'POST' && pathname === '/api/setup/download') {
-			if (state.download && state.download.state === 'downloading') {
-				sendJson(res, 200, { started: false, message: 'download already in progress' });
+			if (state.install && state.install.state === 'downloading') {
+				sendJson(res, 200, { started: false, message: 'setup is already running' });
 				return;
 			}
 			let body = '';
-			req.on('data', (c) => (body += c));
+			req.on('data', (chunk) => (body += chunk));
 			req.on('end', () => {
-			let modelId = null;
-			try { modelId = JSON.parse(body || '{}').modelId ?? null; } catch { modelId = null; }
-			const entry = modelId ? modelById(modelId) : null;
-			const dlUrl = entry ? entry.url : config.modelUrl;
-			const dlDest = entry ? path.join(ROOT_DIR, 'models', entry.filename) : config.modelPath;
-			config.modelUrl = dlUrl;
-			config.modelPath = dlDest;
-			state.download = { state: 'downloading', received: 0, total: 0, percent: 0, error: null };
-			downloadModel({
-				url: dlUrl,
-				dest: dlDest,
-				onProgress: (p) => {
-					state.download = { ...state.download, ...p };
-					broadcast({ type: 'download', ...state.download });
-				},
-			})
-				.then(async (result) => {
-					state.download = { state: 'done', received: result.sizeBytes, total: result.sizeBytes, percent: 100, error: null };
-					broadcast({ type: 'download', ...state.download });
-					console.log(`[setup] model downloaded (${result.sizeBytes} bytes)`);
-					await startSidecar();
-				})
-				.catch((error) => {
-					state.download = { state: 'error', percent: 0, error: error.message };
-					broadcast({ type: 'download', ...state.download });
-					console.error(`[setup] download failed: ${error.message}`);
-				});
-				sendJson(res, 200, { started: true });
+				let modelId = null;
+				try { modelId = JSON.parse(body || '{}').modelId ?? null; } catch { modelId = null; }
+				const entry = modelById(modelId ?? recommendedModelId(systemRamGb()));
+				config.modelUrl = entry.url;
+				config.modelPath = path.join(ROOT_DIR, 'models', entry.filename);
+				state.llamaError = null;
+				const platform = llamaStatus().dir ?? `${process.platform}/${process.arch}`;
+				const publish = (patch) => {
+					state.install = { ...state.install, ...patch };
+					state.download = state.install;
+					broadcast({ type: 'install', ...state.install });
+				};
+				state.install = { state: 'downloading', stage: 'llama', received: 0, total: 0, percent: 0, error: null, modelId: entry.id, label: entry.label, platform };
+				state.download = state.install;
+				broadcast({ type: 'install', ...state.install });
+				(async () => {
+					try {
+						await ensureLlamaBinary({ onProgress: (p) => publish({ ...p, state: 'downloading' }) });
+						await downloadModel({
+							url: entry.url,
+							dest: config.modelPath,
+							sizeBytes: entry.sizeBytes,
+							onProgress: (p) => publish({ ...p, state: 'downloading' }),
+						});
+						publish({ state: 'done', stage: 'done', percent: 100, received: entry.sizeBytes, total: entry.sizeBytes });
+						console.log(`[setup] ${entry.label} installed (${entry.sizeBytes} bytes)`);
+						await startSidecar();
+					} catch (error) {
+						const message = error.message.startsWith('Could not download')
+							? error.message
+							: friendlyDownloadError(error, { what: 'Copilot setup', platform, url: entry.url });
+						publish({ state: 'error', percent: 0, error: message });
+						console.error(`[setup] ${message}`);
+					}
+				})();
+				sendJson(res, 200, { started: true, modelId: entry.id });
 			});
 			return;
 		}

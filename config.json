@@ -1,5 +1,13 @@
 {
-  "mixingStation": {"host": "localhost", "port": 8080},
-  "llama": {"port": 8090},
-  "web": {"port": 8085}
+  "mixingStation": {
+    "host": "localhost",
+    "port": 8080
+  },
+  "llama": {
+    "host": "127.0.0.1",
+    "port": 8090
+  },
+  "web": {
+    "port": 8085
+  }
 }
