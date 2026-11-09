@@ -1,31 +1,17 @@
 const DEFAULT_CONCURRENCY = 10;
 const PROBE_GROUPS = [
-    { group: 'channels', prefix: 'ch', count: 16, label: 'Channel' },
-    { group: 'buses', prefix: 'bus', count: 8, label: 'Bus' },
+    { group: 'channels', prefix: 'ch', count: 32, label: 'Channel' },
+    { group: 'buses', prefix: 'bus', count: 16, label: 'Bus' },
     { group: 'dcas', prefix: 'dca', count: 8, label: 'DCA' },
 ];
-const PROBE_KEYS = ['mix.lvl', 'mix.on', 'mix.pan', 'preamp.filter.0.on', 'preamp.filter.0.freq', 'peq.on', 'cfg.name', 'cfg.color', 'dyn.on', 'mix.sends.0.lvl'];
+const PROBE_KEYS = ['mix.lvl', 'mix.mute', 'mix.pan'];
 function labelForKey(key) {
     if (key === 'mix.lvl')
         return 'Fader';
-    if (key === 'mix.on')
+    if (key === 'mix.mute')
         return 'Mute';
     if (key === 'mix.pan')
         return 'Pan';
-    if (key === 'preamp.filter.0.on')
-        return 'HP Filter Enable';
-    if (key === 'preamp.filter.0.freq')
-        return 'HP Filter Frequency';
-    if (key === 'peq.on')
-        return 'EQ Enable';
-    if (key === 'cfg.name')
-        return 'Channel Name';
-    if (key === 'cfg.color')
-        return 'Channel Color';
-    if (key === 'dyn.on')
-        return 'Compressor Enable';
-    if (key === 'mix.sends.0.lvl')
-        return 'Send 1 Level';
     return key;
 }
 function unitForKey(key) {
@@ -33,8 +19,6 @@ function unitForKey(key) {
         return 'dB';
     if (key === 'mix.pan')
         return '%';
-    if (key === 'preamp.filter.0.freq')
-        return 'Hz';
     return undefined;
 }
 /**
@@ -44,13 +28,9 @@ function unitForKey(key) {
  * back to value inspection.
  */
 function typeForKeyValue(key, value) {
-    if (key === 'mix.on' || key === 'preamp.filter.0.on' || key === 'peq.on' || key === 'dyn.on')
+    if (key === 'mix.mute')
         return 'bool';
-    if (key === 'mix.lvl' || key === 'mix.pan' || key === 'preamp.filter.0.freq' || key === 'mix.sends.0.lvl')
-        return 'float';
-    if (key === 'cfg.name')
-        return 'string';
-    if (key === 'cfg.color')
+    if (key === 'mix.lvl' || key === 'mix.pan')
         return 'float';
     if (typeof value === 'boolean')
         return 'bool';

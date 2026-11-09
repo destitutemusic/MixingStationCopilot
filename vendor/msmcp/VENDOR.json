@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/destitutemusic/MsMcp",
+  "commit": "c1eddee1ef793796c8a02800469229deef976cb7",
+  "version": "0.1.0",
+  "files": {
+    "discovery.js": "203e8fd0230740232224689aeea1e357d8bef669c00d41b7955549d71f37ce2d",
+    "mixingstation.js": "40721adedea156b292f46e90da84643059e1eae559ee809feb957aee90a62511",
+    "msmcp-gateway.js": "9b90635673fa9c650defdb127b7ff2ba2d6fbc1644f4c46bf52589c54a953659",
+    "msmcp-server.js": "386f20cb217d3336b7448f06923de3a20b1b3442f3cf142da39d28d42bad6979"
+  }
+}

@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 export const DEFAULT_HOST = '127.0.0.1';
-export const DEFAULT_PORT = 1234;
+export const DEFAULT_PORT = 8080;
 export const DEFAULT_TIMEOUT_MS = 5_000;
 export const DEFAULT_RECONNECT_DELAY_MS = 1_000;
 export const DEFAULT_MAX_RECONNECT_DELAY_MS = 10_000;

@@ -9,8 +9,9 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "build": "node --check server/index.js && node --check server/llama.js && node --check server/agent.js && node --check server/setup.js && node --check public/app.js",
-    "package": "bash scripts/package-release.sh"
+    "build": "node --check server/index.js && node --check server/llama.js && node --check server/agent.js && node --check server/setup.js && node --check public/app.js && node scripts/check-vendor.mjs",
+    "package": "bash scripts/package-release.sh",
+    "check:vendor": "node scripts/check-vendor.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
